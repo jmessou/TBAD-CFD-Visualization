@@ -1,0 +1,12 @@
+Outlet	Fraction
+Brachiocephalic trunk	0.202
+Left common carotid artery	0.058
+Celiac trunk	0.126
+Left external iliac	0.09
+Left internal iliac	0.037
+Left subcl. Artery	0.135
+Right renal artery	0.072
+Left renal artery	0.084
+Right internal iliac	0.045
+Superior mesenteric artery	0.041
+Right external iliac	0.110
