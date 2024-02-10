@@ -4,7 +4,7 @@
   <br>
 </h1>
 
-<h4 align="center">This repository contains code that helps run large-scale CFD experiments on patients with Type B Aortic Dissection using SimVascular and Paraview.  </h4>
+<h4 align="center">This repository contains code that helps run large-scale CFD experiments on patients with Type B Aortic Dissection using SimVascular and Paraview (see <a href="#repository-structure">repository structure</a> below).  </h4>
 
 
 <p align="center">
@@ -13,8 +13,8 @@
   <a href="#environment-set-up">Environment Set-up</a> •
   <a href="#rcr_prep">rcr_prep</a> •
   <a href="#compflow">compflow</a> • 
-  <a href="#analysis---range">analysis/range</a> •
-  <a href="#analysis---paraview">analysis/paraview</a> •
+  <a href="#analysisrange">analysis/range</a> •
+  <a href="#analysisparaview">analysis/paraview</a> •
   <a href="#resources">Resources</a>
 </p>
 
@@ -33,10 +33,12 @@
 <!-- * Bash scripts (can be run with bash or slurm)
   - ...sh
   - ...sh -->
-* **Python scripts** (see bash scripts for sample runs or examples below)
+* **Python scripts** (see examples below)
   - rcr_prep/get_rcr.py
   - analysis/range/range_analyze.py
   - analysis/paraview/paraview_analyze.py
+* **C++ code** (see example below)
+  - compflow/src/compute_flow.cxx
 
 
 ## Environment Set-up
@@ -51,8 +53,8 @@ conda activate ENV_NAME
 ```
 
 ## rcr_prep
-* **Goal**: Write RCR boundaries based on outlet flow fractions and R/C scaling factors <!-- * Bash script: rcr_prep/get_rcr.sh -->
-* **Python script**: rcr_prep/get_rcr.py (see bash script and python file for more details)
+* **Goal**: Write RCR boundary conditions based on outlet flow fractions and R/C scaling factors <!-- * Bash script: rcr_prep/get_rcr.sh -->
+* **Python script**: rcr_prep/get_rcr.py (see python file for more details)
 * **Input(s)**:
     - Total resistance scale factor, -R (float)
     - Total capacitance scale factor, -C (float)
@@ -60,7 +62,7 @@ conda activate ENV_NAME
     - A file with the order in which the outlets will be written to the output file, --outlet_order_p (.txt)
     - A path to an output directory, --out_dir (directory path)
 * **Output(s)**:
-    - A file with scaled RCR boundaries (.txt)
+    - A file with scaled RCR boundary conditions (.txt)
 
 Example:
 ```
@@ -70,23 +72,23 @@ Output:
 R0.85-C2.0.txt
 ```
 ## compflow
-* **Goal**: C++ wrapper to compute the flow and pressure at the faces. svpost from the svSolver converts the data to vtu and vtp files, but does not run the second part available in the GUI (flow calculations).
+* **Goal**: C++ wrapper to compute the flow and pressure at the faces. svpost from svSolver converts the data to .vtu and .vtp files, but does not run the second part available in the GUI (flow calculations).
 * **C++ source code**: compflow/src/compute_flow.cxx (see code for more details)
 * **Requirements**: 
-    - C++ 17 for filesystem library
+    - C++ 17 (for filesystem library)
     - SimVascular (use underlying GUI function)
-    - VTK (needed by SimVascular)
+    - VTK 8.2 (needed by SimVascular)
     - Please follow the directions from the [svSolver](https://github.com/SimVascular/svSolver) to build VTK. 
 * **Input(s)**:
     - The output folder of svpost, i.e. a directory containing the CFD results (.vtu and .vtp files), -e (path)
-    - The original job directory, i.e. the directory with the mesh-complete folder, -j (path)
+    - The original job directory, i.e. the directory with the mesh-complete folder under it, -j (path)
 * **Output(s)**:
-    - Text files that have the pressure/flow at each face, these are the same as the ones ouput by the SimVascular GUI (.txt) 
+    - Text files that have the pressure/flow at each face. These are the same as the ones ouput by the SimVascular GUI (.txt) 
 * **Info**: This section requires some familiarity with building code, and assumes that you built the svSolver from SimVascular and VTK. Feel free to reach out if you are having troubling with it.
 
 Building with CMake:
 ```
-1) Update SV_DIR and VTK_DIR to point to the SimValscular directory and the VTK directory. 
+1) Update SV_DIR and VTK_DIR in CMakeLists.txt to point to the SimVascular directory and the VTK directory. 
 2) Make a build directory and enter it
 
 mkdir build
@@ -96,10 +98,17 @@ cd build
   cmake ..
   make
 
+4) You should now have an executable called compflow.
+
+ls 
+
+Output: CMakeCache.txt  CMakeFiles  cmake_install.cmake  compflow  Makefile
+
+5) You can make a symbolic link to compflow in your bin folder to avoid needing a full path at runtime.
 ```
 
 
-Example:
+Running compflow - Example:
 ```
 FULL_PATH/compflow -e FULL_PATH/test-converted-results -j FULL_PATH/test
 ```
@@ -115,7 +124,7 @@ FULL_PATH/compflow -e FULL_PATH/test-converted-results -j FULL_PATH/test
     - The number of points before and after the current one to look for a local min/max. You can use the number of files per cycle divided by 2. --nb_points_comp (int)
 * **Output(s)**:
     - Plots of the flow and pressure at all faces (.png) and a summary with the absolute and relative differences (.txt) 
-* **Info**: Note that the name of the folder --converted_res_dir needs to be formatted in a specific way so that some parameters can be extracted from the name and not provided as inputs. See code for details.
+* **Info**: Note that the name of the folder --converted_res_dir can be formatted in a specific way so that some parameters can be extracted from the name and not provided as inputs. See code for details.
 
 Example:
 ```
@@ -134,23 +143,25 @@ python range_analyze.py --patient 2 --converted_res_dir ../test_converted_res_di
     3. Matches regions to the true lumen and the false lumen using a file identifying the false lumen as the small or large region
   - **Flow calculations**: 
 
-    4. Computes at each timestep the cross-sectional flow rate and pressure for sthe TL and FL separately 
+    4. Computes at all timesteps the cross-sectional flow rate and pressure for the TL and FL separately 
   - **OSI and TAWSS calculations**: 
   
     5. Computes the OSI and TAWSS
   - **Visualization**:
 
-    6. The fluid model with the true lumen
-    7. The OSI and TAWSS
-    8. The velocity at the cross-sections at a given time step (i.e. systole) or all time steps
-    8. The velocity streamlines colored by velocity magnitude at a given time step (i.e. systole) or all time steps
+    6. Shows the fluid model with the true lumen
+    7. Shows the OSI and TAWSS
+    8. Shows the velocity at all cross-sections at a given time step (i.e. systole) or all time steps
+    8. Shows the velocity streamlines colored by velocity magnitude at a given time step (i.e. systole) or all time steps
   - **Screenshots and state file**:
 
     9. Saves a screenshot of all views 
-    10. Writes a state file that can be open in Paraview if more modifications want to be made
+    10. Writes a state file that can be open in Paraview if more modifications are needed
+* **Requirements**: pvpython (Paraview)
 * **Python script**: analysis/paraview/paraview_analyze.py (see config file and python file for more details)
 * **Input(s)**:
   - A config file, see example.ini, -c or --config (.ini)
+    
   Paths to all the following inputs should be specified in the config file.
   - A centerline of the fluid model (can be obtained from SimVascular) (.vtp) **[REQUIRED]**
   - A folder containing the CFD results at each time step in a .vtu format **[REQUIRED]**
@@ -158,7 +169,11 @@ python range_analyze.py --patient 2 --converted_res_dir ../test_converted_res_di
   - A file containing the location of the slices to process. It is suggested to use the automatic slicing function, then move the slices of interest to this file. (.tsv)
 * **Main Output(s)**:
     - Views described above (.png) and a file with the flow rate and pressure at each cross-section for all timesteps  (.tsv) 
-* **Info**: Needs pvpython from Paraview.
+* **Info**: Suggested use for new data: 
+
+  **[Cross-section dependent]** (1) Automatically slice the aorta, (2) Select slices of interest and copy them to the fixed slice file, (3) Visualize the slices, (4) Update the false_lumen_id file accordingly, (5) Process the cross-sections using loop_timestep
+
+  **[Model without cross-sections, TAWSS, OSI, Velocity Streamlines]** (6) Can be run directly after updating the parameters in the config files
 
 Example: 
 ```
