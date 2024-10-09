@@ -1,0 +1,14 @@
+wall_outer
+wall_inner
+inlet
+b-trunk
+carotid
+subclavian
+celiac
+superior-mesenteric
+right-renal
+left-renal
+right-ext-illiac
+right-int-illiac
+left-int-illiac
+left-ext-illiac

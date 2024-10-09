@@ -1,3 +1,8 @@
+
+#Run this in paraview's interactive shell to use this file
+# import importlib; import sys; sys.path.append("D:\Aortic Dissection\Kelly Experiments\Joseph\python_code"); import test_para; importlib.reload(test_para); test_para.process_paraview("1")
+# importlib.reload(test_para); test_para.process_paraview("1")
+#test_para.pv_analyze("2",use_diff_max=False,stream_nb_pts=500)
 import paraview
 from paraview.simple import *
 from paraview.simple import _DisableFirstRenderCameraReset
@@ -18,8 +23,11 @@ import numpy as np
 import pdb 
 import os 
 
-#from paraview_local import *
+import copy
+# from paraview_local import *
 
+# import sys
+# print("User Current Version:-", sys.version)
 import argparse
 import subprocess
 from _paraview_config import ConfigAll
@@ -56,7 +64,8 @@ def set_up_view(coords,suffix="",assign_layout=True,view_dic={"az":-35,"el":0}, 
     renderView1.ViewTime = analysis_time_step
     GetActiveCamera().Azimuth(view_dic["az"])
     GetActiveCamera().Elevation(view_dic["el"])
-    Render()    
+    Show(); Render(); HideAll()
+    
     # GetActiveCamera().Azimuth(150)
     if assign_layout:
         # create new layout object 'Layout #1'
@@ -69,9 +78,10 @@ def set_up_view(coords,suffix="",assign_layout=True,view_dic={"az":-35,"el":0}, 
     return renderView1, layout1
 
  
- 
 
 def get_vtk(pv_vtu_src):
+    while hasattr(pv_vtu_src,'Input'):
+        pv_vtu_src = pv_vtu_src.Input
     reader = vtk.vtkXMLUnstructuredGridReader()                                  
     reader.SetFileName(pv_vtu_src.FileName[0])                                                 
     reader.Update()                                                                                                                                                            
@@ -107,18 +117,20 @@ def clean_pipe():
 def process_paraview(config_file='example.ini',patient=None,use_diff_max=False,stream_nb_pts=None,def_view=None):
     print_header("Read Config File...")
     Config1 = ConfigAll(config_file) 
-    file_range, loop_timestep, _, nb_files, file_stride =  Config1.get_analysis()
+    print(f"{Config1}\n")
+    file_range, loop_timestep, _, nb_files, file_stride,_ =  Config1.get_analysis()
     
     #Get Patient from ini file if None
     if patient is None: 
-        patient = Config1.get_general()
+        patient, _ = Config1.get_general()
 
     #Loop through each file separately 
     if loop_timestep and file_range is not None and Config1.fc.process_slice_bool:
         append_res = False
         nb_files = None
         print_header("[loop_timestep] Processing each file separately")
-        for timestep in range(file_range[0],file_range[1],file_stride):
+        #for timestep in range(file_range[0],file_range[1],file_stride):
+        for timestep in range(file_range[0],file_range[1]+file_stride,file_stride):
             file_range_i = (timestep,timestep)
             print("Range: {}".format(file_range_i))
             pv_analyze(patient,Config1,use_diff_max=use_diff_max,stream_nb_pts=stream_nb_pts,file_range=file_range_i,nb_files=nb_files,append_res=append_res,def_view=def_view)
@@ -169,6 +181,9 @@ def find_viewed_vtu(src):
     vtu_cur = "Not Found"
     index_time = -1
     tstep = GetActiveView().ViewTime
+    while hasattr(src,'Input'):
+        src = src.Input
+    print("TimestepValues: {}".format(src_in.TimestepValues))
     for i,time_i in enumerate(src.TimestepValues):
         if tstep == time_i:
             index_time = i
@@ -205,31 +220,43 @@ def clip_box(src,coords,opacity=None,myview=None,box_type="entry"):
 
 def do_slice_save(fc,view_dic,input_src_slices,patient,stats,slices_out_dic,slices_load_out_dic,coords,
         all_times,out_dir=".",image_res=[800,500],analysis_time_step=6,wall_opacity=0.05,
-        cb_mode="visible",bar_range=[0,0.1],backgrounds=None,suffix=""):
+        cb_mode="visible",bar_range=[0,0.1],backgrounds=None,suffix="",mesh_to_keep_str="",input_src_color=None,
+        filter_slices_shown="",tl_opacity=None,preset="rainbow", color_by_array='Velocity [m/s]',title='Velocity Magnitude [m/s]',
+        slice_suffix="",other_regions_to_show=None):
     if cb_mode == "bar_range":
         suffix += "_" + str(bar_range[1]).replace(".","_")
     else:
         suffix += ""
-    slices_out = os.path.join(out_dir,"slices_p{}{}.png".format(patient,suffix))
-    slices_out_load = os.path.join(out_dir,"slices_p{}_fixed{}.png".format(patient,suffix))
+    slices_out = os.path.join(out_dir,"{}slices{}_p{}{}.png".format(mesh_to_keep_str,slice_suffix,patient,suffix))
+    slices_out_load = os.path.join(out_dir,"{}slices{}_p{}_fixed{}.png".format(mesh_to_keep_str,slice_suffix,patient,suffix))
     centerline_out = os.path.join(out_dir,"centerline_p{}.png".format(patient))
 
     if fc.save_slices_bool:
-        print_header("Saving Slices")
+        print_header(f"Saving Slices {slice_suffix}")
         if fc.slice_centerline_bool: 
-            renderView11, layout11 = set_up_view(coords,"Slices",view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
+            renderView11, layout11 = set_up_view(coords,f"Slices{slice_suffix}",view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
             if fc.save_all_times_bool:
-                save_all_times(slices_out,slices_out_dic["slices"],slices_out_dic["slice_names"],input_src=input_src_slices,image_res=image_res,mode=cb_mode,bar_range=bar_range,all_times=all_times,myview=renderView11)
+                save_all_times(slices_out,slices_out_dic["slices"],slices_out_dic["slice_names"],input_src=input_src_slices,image_res=image_res,
+                    mode=cb_mode,bar_range=bar_range,all_times=all_times,myview=renderView11,input_src_color=input_src_color, preset=preset,color_by_array=color_by_array,title=title,
+                other_regions_to_show=other_regions_to_show)
             #Main Timestep (systole)
-            show_slices(slices_out_dic["slices"],slices_out_dic["slice_names"],input_src=input_src_slices,input_src_opacity=wall_opacity,mode=cb_mode,bar_range=bar_range,view_time=analysis_time_step,myview=renderView11)
+            show_slices(slices_out_dic["slices"],slices_out_dic["slice_names"],input_src=input_src_slices,input_src_opacity=wall_opacity,
+                mode=cb_mode,bar_range=bar_range,view_time=analysis_time_step,myview=renderView11,input_src_color=input_src_color,
+                filter_slices_shown=filter_slices_shown,tl_opacity=tl_opacity, preset=preset,color_by_array=color_by_array,title=title,
+                other_regions_to_show=other_regions_to_show)
             save_screen(add_suffix(slices_out,"_step{}".format(analysis_time_step)),backgrounds=backgrounds,image_res=image_res,myview=renderView11)
         
         if fc.load_and_slice_centerline_bool:
-            renderView12, layout12 = set_up_view(coords,"Slices_load",view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
+            renderView12, layout12 = set_up_view(coords,f"Slices_load{slice_suffix}",view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
             if fc.save_all_times_bool:
-                save_all_times(slices_out_load,slices_load_out_dic["slices"],slices_load_out_dic["slice_names"],input_src=input_src_slices,image_res=image_res,mode=cb_mode,bar_range=bar_range,all_times=all_times,myview=renderView12)
+                save_all_times(slices_out_load,slices_load_out_dic["slices"],slices_load_out_dic["slice_names"],input_src=input_src_slices,
+                    image_res=image_res,mode=cb_mode,bar_range=bar_range,all_times=all_times,myview=renderView12,input_src_color=input_src_color, preset=preset,color_by_array=color_by_array,title=title,
+                other_regions_to_show=other_regions_to_show)
             #Main Timestep (systole)
-            show_slices(slices_load_out_dic["slices"],slices_load_out_dic["slice_names"],input_src=input_src_slices,input_src_opacity=wall_opacity,mode=cb_mode,bar_range=bar_range,view_time=analysis_time_step,myview=renderView12)
+            show_slices(slices_load_out_dic["slices"],slices_load_out_dic["slice_names"],input_src=input_src_slices,input_src_opacity=wall_opacity, 
+                mode=cb_mode,bar_range=bar_range,view_time=analysis_time_step,myview=renderView12,input_src_color=input_src_color,
+                filter_slices_shown=filter_slices_shown,tl_opacity=tl_opacity, preset=preset,color_by_array=color_by_array,title=title,
+                other_regions_to_show=other_regions_to_show)
             save_screen(add_suffix(slices_out_load,"_step{}".format(analysis_time_step)),backgrounds=backgrounds,image_res=image_res,myview=renderView12)
             
     #Show and save centerline
@@ -241,7 +268,7 @@ def do_slice_save(fc,view_dic,input_src_slices,patient,stats,slices_out_dic,slic
         # Show(stats["longest_centerline"]); save_screen(add_suffix(centerline_out,"_longest"),myview=renderView10); Hide(stats["longest_centerline"])
         select_centerline(stats["centerline"],stats["longest_centerline_id"],print_all=True,save_path=add_suffix(centerline_out,"_longest"))
     
-def do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir="/out",analysis_time_step=6,wall_opacity=0.05,bar_range=[0,0.9],append_res=False,stride=10):
+def do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir="/out",analysis_time_step=6,wall_opacity=0.05,bar_range=[0,0.9],append_res=False,stride=10,split_by_centroid_bool=True):
     box_size = 50
     z_normal = False
     force_normal=10000 # Will set the normal to the zaxis for every slice after this point
@@ -255,12 +282,12 @@ def do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir="/out",an
     #load_and_slice will NOT overwrite this file, remove it manually
     fl_id_tsv=os.path.join(out_dir,"false_lumen_id_p{}.tsv".format(patient))
 
-    if show: #Need a view
+    if show or fc.any_visualization(): #Need a view
         coords, _ = get_vtk(stats["all_results_00"]) 
         renderView1, layout1 = set_up_view(coords,analysis_time_step=analysis_time_step)
         camera=GetActiveCamera()
         camera.Elevation(45)
-        GetActiveView().ViewTime = analysis_time_step 
+        #GetActiveView().ViewTime = analysis_time_step 
 
     slices_out_dic = {"slices":None, "slice_names":None, "results_df":None}
     slices_load_out_dic = slices_out_dic.copy()
@@ -274,14 +301,15 @@ def do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir="/out",an
         results_tsv_i = results_tsv
         print("Results tsv: {}".format(results_tsv_i))
         slices_out_dic["slices"], slices_out_dic["slice_names"], slices_out_dic["results_df"] = slice_centerline(input_src_slices,stats["longest_centerline"],slices_tsv=add_suffix(slices_tsv,"_all"),results_tsv=results_tsv_i,
-                stride=stride,box_size=box_size,z_normal=z_normal,show=show,force_normal=force_normal,erase_range=erase_range,fl_id_tsv=fl_id_tsv,process_slice_bool=fc.process_slice_bool,append_res=append_res)
+                stride=stride,box_size=box_size,z_normal=z_normal,show=show,force_normal=force_normal,erase_range=erase_range,fl_id_tsv=fl_id_tsv,process_slice_bool=fc.process_slice_bool,append_res=append_res,
+                split_by_centroid_bool=split_by_centroid_bool)
 
     if fc.load_and_slice_centerline_bool:
         print_header("Load and Slice CenterLine")
         results_tsv_i = add_suffix(results_tsv,"_fixed")
         print("Results tsv: {}".format(results_tsv_i))
         slices_load_out_dic["slices"], slices_load_out_dic["slice_names"], slices_load_out_dic["results_df"] = load_and_make_slices(input_src_slices,slices_tsv,results_tsv=results_tsv_i,box_size=box_size,
-                z_normal=z_normal,show=show,force_normal=force_normal,fl_id_tsv=fl_id_tsv,process_slice_bool=fc.process_slice_bool,append_res=append_res)
+                z_normal=z_normal,show=show,force_normal=force_normal,fl_id_tsv=fl_id_tsv,process_slice_bool=fc.process_slice_bool,append_res=append_res,split_by_centroid_bool=split_by_centroid_bool)
 
     # import pdb; pdb.set_trace()
     # if load_state(patient) != 0 :
@@ -298,52 +326,79 @@ def do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir="/out",an
     return slices_out_dic, slices_load_out_dic 
 
 #Show OSI and TAWSS
-def show_osi_tawss(coords,stats,cb_mode_osi,cb_mode_tawss,bar_range_tawss,view_dic,patient,debug=False):
+#other_regions_to_show not tested but available for future applications (see displacement for example)
+def show_osi_tawss(coords,stats,cb_mode_osi,cb_mode_tawss,bar_range_tawss,view_dic,patient,debug=False,opacity=1,other_regions_to_show={"osi":None,"tAWSS":None}):
     # #=============================
     # #       OSI - View 15
     # #=============================
     renderView15, _= set_up_view(coords,"15_OSI",view_dic=view_dic[patient[0]])
-    format_colorbar(stats["osi"],mode=cb_mode_osi,color_by_array="OSI",title="OSI",debug=debug)
+    format_colorbar(stats["osi"],mode=cb_mode_osi,color_by_array="OSI",title="OSI",debug=debug, opacity=opacity)
+    show_other_regions(other_regions_to_show["osi"],bar_range=[0,1],mode="ignore",separate=True,preset="rainbow",color_by_array="OSI",title="OSI")
     ResetCamera()  
 
     # #=============================
     # #       OSI - View 15_B
     # #=============================
     renderView15_B, _= set_up_view(coords,"15_OSI_B",view_dic=view_dic[patient[0]])
-    format_colorbar(stats["osi"],mode=cb_mode_osi,color_by_array="OSI",title="OSI",debug=debug)
+    format_colorbar(stats["osi"],mode=cb_mode_osi,color_by_array="OSI",title="OSI",debug=debug, opacity=opacity)
+    show_other_regions(other_regions_to_show["osi"],bar_range=[0,1],mode="ignore",separate=True,preset="rainbow",color_by_array="OSI",title="OSI")
     ResetCamera()  
     GetActiveCamera().Azimuth(180)
     Render()
-
+    
     #=============================
     #       TAWSS - View 16
     #=============================
     renderView16, _= set_up_view(coords,"16_TAWSS",view_dic=view_dic[patient[0]])
-    format_colorbar(stats["tAWSS"],bar_range=bar_range_tawss,mode=cb_mode_tawss,color_by_array="WSS_time_average",title="TAWSS (Pa)",debug=debug)
+    disp_cur,_ = format_colorbar(stats["tAWSS"],bar_range=bar_range_tawss,mode=cb_mode_tawss,color_by_array="WSS_time_average",title="TAWSS (Pa)",debug=debug, opacity=opacity)
+    show_other_regions(other_regions_to_show["tawss"],bar_range=[0,1],mode="ignore",separate=True,preset="rainbow",color_by_array="WSS_time_average",title="TAWSS (Pa)")
+    # disp_cur.Representation = 'Surface'
+    # import pdb; pdb.set_trace()
+    # cbDisplay = Show(stats["all_results_00"], renderView16, 'UnstructuredGridRepresentation')
+    # cbDisplay = set_solid_col(cbDisplay,opacity=0.2,color="grey")
     ResetCamera() 
 
     #=============================
     #       TAWSS - View 16_B
     #=============================
     renderView16_B, _= set_up_view(coords,"16_TAWSS_B",view_dic=view_dic[patient[0]])
-    format_colorbar(stats["tAWSS"],bar_range=bar_range_tawss,mode=cb_mode_tawss,color_by_array="WSS_time_average",title="TAWSS (Pa)",debug=debug)
+    format_colorbar(stats["tAWSS"],bar_range=bar_range_tawss,mode=cb_mode_tawss,color_by_array="WSS_time_average",title="TAWSS (Pa)",debug=debug, opacity=opacity)
+    show_other_regions(other_regions_to_show["tawss"],bar_range=[0,1],mode="ignore",separate=True,preset="rainbow",color_by_array="WSS_time_average",title="TAWSS (Pa)")
     ResetCamera() 
     GetActiveCamera().Azimuth(180)
     Render() 
 
     return renderView15, renderView15_B, renderView16, renderView16_B
 
-def show_model(coords,all_results_00,truelumenvtp,cross_sec,view_dic,patient,thrombosedvtp=None): 
+def show_model(coords,all_results_00,truelumenvtp,cross_sec,view_dic,patient,thrombosedvtp=None,solid=None):       
     #=============================
     #      True lumen model and Combined model - View 4
     #=============================
     renderView4, _= set_up_view(coords,"4_Model",view_dic=view_dic[patient[0]])
+    if solid is not None:
+        solDisplay = Show(solid, renderView4, 'UnstructuredGridRepresentation')
+        # solDisplay = set_solid_col(solDisplay,opacity=0.1,color="blue")
+        solDisplay = set_solid_col(solDisplay,opacity=0.1,color="grey")
+        # model_color = "blue"
+        # tl_color = "green"
+        model_color = "blue"
+        tl_color = "purple"       
+        model_opacity = 0.17
+        tl_opacity = 0.4
+    else: 
+        model_color = "grey"
+        tl_color = "purple"
+        model_opacity =  0.2
+        tl_opacity = 0.3
     #True Lumen
-    tlDisplay = Show(truelumenvtp, renderView4, 'UnstructuredGridRepresentation')
-    tlDisplay = set_solid_col(tlDisplay,opacity=0.3,color="purple")
+    if truelumenvtp is not None:
+        tlDisplay = Show(truelumenvtp, renderView4, 'UnstructuredGridRepresentation')
+        tlDisplay = set_solid_col(tlDisplay,opacity=tl_opacity,color=tl_color)
     #Combined Model
     cbDisplay = Show(all_results_00, renderView4, 'UnstructuredGridRepresentation')
-    cbDisplay = set_solid_col(cbDisplay,opacity=0.2,color="grey")
+    # cbDisplay = set_solid_col(cbDisplay,opacity=0.2,color="grey")
+    cbDisplay = set_solid_col(cbDisplay,opacity=model_opacity,color=model_color)
+    # import pdb; pdb.set_trace()
     if thrombosedvtp != None:
         thrombus, thDisplay = clip_box(thrombosedvtp, coords, myview=renderView4,box_type="thrombus")
         # thDisplay = Show(thrombus, renderView4, 'UnstructuredGridRepresentation')
@@ -387,9 +442,9 @@ def add_params_to_suffix(color_bar_mode_vel, bar_range, view_dic, patient):
     else:
         suffix = ""
     if view_dic[patient[0]]["el"] != 45:
-        suffix = suffix + "_el{}".format(view_dic[patient[0]]["el"])
+        suffix = suffix + "_el{:g}".format(view_dic[patient[0]]["el"])
     if view_dic[patient[0]]["az"] != -35:
-        suffix = suffix + "_az{}".format(view_dic[patient[0]]["az"])
+        suffix = suffix + "_az{:g}".format(view_dic[patient[0]]["az"])
 
     return suffix 
 
@@ -409,9 +464,10 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     #==========================================
     #       Parameters - Set using config file (.ini)
     #==========================================
-    #PATHS, FILE READER + ANALYSIS, SLICE WORK
+    #MESH to keep, PATHS, FILE READER + ANALYSIS, SLICE WORK
+    _, mesh_to_keep = Config1.get_general()
     centerline_path, vtu_folder, slices_tsv, slices_tsv_all, out_dir_conf, tl_path, etfn_path = Config1.get_paths()
-    _, _, analysis_time_step, _, _ = Config1.get_analysis()
+    _, _, analysis_time_step, _, _, split_by_centroid_bool= Config1.get_analysis()
     slice_stride = Config1.get_slice() #If slice_centerline is used 
     if out_dir is None:
         out_dir = out_dir_conf
@@ -422,11 +478,12 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
         def_view = {"az":az,"el":el}
 
     #VISUALIZATION: velocity/osi/tawss colorbar parameters
-    palette, cb_mode_osi, color_bar_mode_vel, cb_mode_tawss, bar_range_tawss, bar_range_vel_max = Config1.get_vis()
+    # palette, cb_mode_osi, color_bar_mode_vel, cb_mode_tawss, bar_range_tawss, bar_range_vel_max = Config1.get_vis()
+    palette, color_bars = Config1.get_vis()
     
     #SLICE + MODEL VISUALIZATION
     #cross_sec: list of cross section names
-    wall_opacity, cross_sec = Config1.get_slice_vis() 
+    wall_opacity, flap_opacity, cross_sec, filter_slices_shown, tl_opacity = Config1.get_slice_vis() 
     show_thrombus = Config1.get_model_vis()
 
     #STREAMLINES parameters
@@ -441,9 +498,9 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     coords = None
     suffix = "" #Will be filled and added to files to keep track of parameters
 
-    #Only used later if color_bar_mode_vel == "bar_range"
-    bar_range, velmax_folder = get_bar_range_vel(patient,bar_range_vel_max,use_diff_max)
-    print("color_bar_mode_vel: {} | bar_range velocity: {}| velmax_folder {}".format(color_bar_mode_vel,bar_range,velmax_folder))
+    #Only used later if color_bars["vel"].mode == "bar_range"
+    bar_range, velmax_folder = get_bar_range_vel(patient,color_bars["vel"].max,use_diff_max)
+    print("color_bar_mode_vel: {} | bar_range velocity: {}| velmax_folder {}".format(color_bars["vel"].mode,bar_range,velmax_folder))
     #=================END PARAMETERS=======================
 
     #Make Directory for all the results
@@ -454,9 +511,34 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     #=============================
     #       Load Data and compute necessary info (converted pressure/velocity, centerline, OSI, tAWSS)
     #=============================
-    all_results_00, stats = load_from_scratch(vtu_folder,centerline_path,file_range=file_range,nb_files=nb_files)
+    all_results_00, main_stats, array_names = load_from_scratch(vtu_folder,centerline_path,file_range=file_range,nb_files=nb_files)
+    if all_results_00 is None or main_stats is None: 
+        print("[pv_analyze] Empty arrays, leaving function...")
+        return 
+        
+    show_solid = True
+    # mesh_to_keep = "fluid"
+    # mesh_to_keep = "solid"
+    # mesh_to_keep = "all"
+    print("Mesh to keep: {}".format(mesh_to_keep))
+    if mesh_to_keep == "fluid":
+        stats = main_stats["fluid"]
+        mesh_to_keep_str = mesh_to_keep + "_"
+        input_src_color = None
+    elif mesh_to_keep == "solid":
+        stats = main_stats["solid"]
+        mesh_to_keep_str = mesh_to_keep + "_"
+        input_src_color = "blue"
+    else: 
+        stats = main_stats["all"]
+        mesh_to_keep_str = ""
+        input_src_color = None
     if fc.save_model_bool:
-        truelumenvtp = load_true_lumen(tl_path)  #Needed to show model 
+        if os.path.exists(tl_path):
+            truelumenvtp = load_true_lumen(tl_path)  #Needed to show model 
+        else:
+            print(f"True lumen not found, will not show in model figure...: {tl_path}")
+            truelumenvtp = None
         if "3F" in patient and show_thrombus:
             suffix += "_thrombus"
             print("Reading ET_FN model:{}".format(etfn_path))
@@ -464,21 +546,30 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
         else:
             etfnvtp = None
 
-    all_times = all_results_00.TimestepValues
+    # all_times = all_results_00.TimestepValues
+    src_in = all_results_00
+    while hasattr(src_in,'Input'):
+        src_in = src_in.Input
+    all_times = src_in.TimestepValues
+    
+    if len(all_times) == 0:
+        all_times = [0]
     if analysis_time_step > all_times[-1]:
         print("[WARNING] analysis_time_step = {} and last time step avaible = {}".format(analysis_time_step,all_times[-1]))
         analysis_time_step = all_times[-1]
-        print("Set analysis_time_step = {}".format(analysis_time_step))
-
+        print("Setting analysis_time_step = {}".format(analysis_time_step))
+    else: 
+        print(f"Analysis_time_step: {analysis_time_step}")
     # velocityms = FindSource("Velocity [m/s]")
     velocityms = stats["velocityms"]
     input_src_slices = stats["pressuremmHg"]
     SetActiveSource(input_src_slices)
-    
+
     #=============================
     #       Slice work, see function
     #=============================
-    slices_out_dic, slices_load_out_dic = do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir,analysis_time_step,wall_opacity,bar_range,append_res,slice_stride)
+    slices_out_dic, slices_load_out_dic = do_slice_work(fc,input_src_slices,patient,stats,slices_tsv,out_dir,analysis_time_step,
+                                wall_opacity,bar_range,append_res,slice_stride,split_by_centroid_bool)
 
     #=============================
     #       Parameters - Velocity
@@ -490,9 +581,9 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     view_dic = {"1": def_view, "2": def_view, "3": def_view}
     
     if True and view_dic[patient[0]]["el"] != 45:
-        suffix = suffix + "_el{}".format(view_dic[patient[0]]["el"])
+        suffix = suffix + "_el{:g}".format(view_dic[patient[0]]["el"])
     if True and view_dic[patient[0]]["az"] != -35:
-        suffix = suffix + "_az{}".format(view_dic[patient[0]]["az"])
+        suffix = suffix + "_az{:g}".format(view_dic[patient[0]]["az"])
         
     #Saving parameters
     backgrounds_slice = {"white":"WhiteBackground"}
@@ -502,12 +593,37 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     # backgrounds = {"white":"WhiteBackground", "black":"BlackBackground", "blueG":"BlueGrayBackground",
     #     "lightG":"LightGrayBackground", "trans":"transparent"} 
     
+    # ###===Debug 
+    # coords, _ = get_vtk(all_results_00) 
+    # myview = set_up_view(coords,view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
+    # other_regions_to_show = {"flap":RegionToShow("flap",main_stats["solid"]["flap"]["tAWSS"],flap_opacity,None)}
+    # import pdb; pdb.set_trace()
+    # ###===
+
     # #=============================
     # #      Save Slices + Centerlines 
     # #=============================
     coords, _ = get_vtk(all_results_00) 
     do_slice_save(fc,view_dic,input_src_slices,patient,stats,slices_out_dic,slices_load_out_dic,
-        coords,all_times,out_dir,image_res,analysis_time_step,wall_opacity,color_bar_mode_vel,bar_range,backgrounds_slice,suffix)
+        coords,all_times,out_dir,image_res,analysis_time_step,wall_opacity,color_bars["vel"].mode,
+        bar_range,backgrounds_slice,suffix,mesh_to_keep_str,input_src_color=input_src_color,
+        filter_slices_shown=filter_slices_shown,tl_opacity=tl_opacity)
+
+    # #=============================
+    # #      Save Slices showing Displacement 
+    # #=============================
+    if fc.save_slices_displacement_bool:
+        # other_regions_to_show = {"flap":RegionToShow("flap",main_stats["solid"]["flap"]["flap"],flap_opacity,None),
+        #                     "wall":RegionToShow("wall",main_stats["solid"]["wall"]["wall"],wall_opacity,input_src_color)}
+        other_regions_to_show = {"flap":RegionToShow("flap",main_stats["solid"]["flap"]["flap"],flap_opacity,None)}
+        tmp_fc = copy.deepcopy(fc)
+        tmp_fc.save_centerline_bool = False
+        tmp_fc.save_slices_bool = True
+        do_slice_save(tmp_fc,view_dic,input_src_slices,patient,stats,slices_out_dic,slices_load_out_dic,
+            coords,all_times,out_dir,image_res,analysis_time_step,wall_opacity,color_bars["disp"].mode,
+            color_bars["disp"].range,backgrounds_slice,suffix,mesh_to_keep_str,input_src_color="blue",
+            filter_slices_shown=filter_slices_shown,tl_opacity=tl_opacity,preset=color_bars["disp"].palette, 
+            color_by_array='Displacement',title='Displacement Magnitude [mm]', slice_suffix="_disp",other_regions_to_show=other_regions_to_show)
 
     #=============================
     #      True lumen model and Combined model - View 4
@@ -515,14 +631,18 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
     if fc.save_model_bool: 
         print_header("Models")
         print(cross_sec)
-        renderView4 = show_model(coords,all_results_00,truelumenvtp,cross_sec,view_dic,patient,etfnvtp)
+        if show_solid and "solid" in main_stats.keys() and "all_results_00" in main_stats["solid"].keys():
+            src_solid = main_stats["solid"]["all_results_00"]
+        else: 
+            src_solid = None
+        renderView4 = show_model(coords,main_stats["fluid"]["all_results_00"],truelumenvtp,cross_sec,view_dic,patient,etfnvtp,solid=src_solid)
+        # renderView4 = show_model(coords,all_results_00,truelumenvtp,cross_sec,view_dic,patient,etfnvtp,solid=main_stats["solid"]["all_results_00"])
     
     #=============================
     #       OSI and TAWSS - View 15, 15_B, 16, 16_B
     #=============================
     if fc.save_osi_tawss_bool:
-        print_header("OSI and TAWSS")
-        renderView15, renderView15_B, renderView16, renderView16_B = show_osi_tawss(coords,stats,cb_mode_osi,cb_mode_tawss,bar_range_tawss,view_dic,patient,debug=debug)
+        renderView15, renderView15_B, renderView16, renderView16_B = show_osi_tawss(coords,stats,color_bars["osi"].mode,color_bars["tawss"].mode,color_bars["tawss"].range,view_dic,patient,debug=debug)
 
     #=============================
     #       Velocity Work (streamlines)
@@ -540,7 +660,7 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
         #=============================    
         # import pdb; pdb.set_trace()
         renderView1, layout1 = set_up_view(coords,view_dic=view_dic[patient[0]],analysis_time_step=analysis_time_step)
-        velocitymsDisplay,disp_LUT = format_colorbar(velocityms,bar_range=bar_range,mode=color_bar_mode_vel,debug=debug)
+        velocitymsDisplay,disp_LUT = format_colorbar(velocityms,bar_range=bar_range,mode=color_bars["vel"].mode,debug=debug)
         velocitymsDisplay.Opacity = wall_opacity_vel
         
         #=============================
@@ -550,7 +670,8 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
         # create a new 'Stream Tracer'
         streamlines_Np = StreamTracer(registrationName='Streamlines_Np', Input=velocityms,
             SeedType='Point Cloud')
-        streamlines_Np.Vectors = ['POINTS', 'velocity']
+        streamlines_Np.Vectors = ['POINTS', array_names['velocity']]
+        # streamlines_Np.Vectors = ['POINTS', "Velocity [m/s]"]
         streamlines_Np.MaximumStreamlineLength = stream_max_length
         # init the 'Point Cloud' selected for 'SeedType'
         streamlines_Np.SeedType.Center = stream_center
@@ -572,9 +693,9 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
         tube1Display.SetScalarBarVisibility(renderView1, True)
         
         #Add to suffix parameters
-        suffix = add_params_to_suffix(color_bar_mode_vel, bar_range, view_dic, patient)
+        suffix = add_params_to_suffix(color_bars["vel"].mode, bar_range, view_dic, patient)
         #====> Save main pictures (streamlines of the entire model)
-        path_stream = os.path.join(out_dir,"main_streams",velmax_folder,"{}_{}p_step{}_stream{}.png".format(patient,str(stream_nb_pts),analysis_time_step,suffix))
+        path_stream = os.path.join(out_dir,"main_streams",velmax_folder,"{}{}_{}p_step{}_stream{}.png".format(mesh_to_keep_str,patient,str(stream_nb_pts),analysis_time_step,suffix))
         os.makedirs(os.path.dirname(path_stream),exist_ok=True)
         save_screen(path_stream,image_res,myview=renderView1)
         
@@ -634,16 +755,16 @@ def pv_analyze(patient,Config1,use_diff_max=False,stream_nb_pts=None,out_dir=Non
             save_screen(add_suffix(path_stream,"_model_tlcb"),image_res,backgrounds_model,palette,myview=renderView4)
     
     if fc.save_model_bool:
-        model_path_2 = os.path.join(out_dir,"p{}.png".format(patient))
+        model_path_2 = os.path.join(out_dir,"{}p{}.png".format(mesh_to_keep_str,patient))
         save_screen(add_suffix(model_path_2,"_model_tlcb"+suffix),image_res,backgrounds_model,palette,myview=renderView4)
     
     if fc.save_osi_tawss_bool:
         backgrounds = {"trans":"transparent"}
-        if cb_mode_tawss == "bar_range":
-            suffix = "_" + str(bar_range_tawss[1]).replace(".","_")
+        if color_bars["tawss"].mode == "bar_range":
+            suffix = "_" + str(color_bars["tawss"].range[1]).replace(".","_")
         else:
             suffix = ""
-        path_stream_osi_tawss = os.path.join(out_dir,"osi_tawss","p{}.png".format(patient))
+        path_stream_osi_tawss = os.path.join(out_dir,"osi_tawss","{}p{}.png".format(mesh_to_keep_str,patient))
         os.makedirs(os.path.dirname(path_stream_osi_tawss),exist_ok=True)
         save_screen(add_suffix(path_stream_osi_tawss,"_OSI"),image_res,backgrounds,palette,myview=renderView15)
         save_screen(add_suffix(path_stream_osi_tawss,"_OSI_180"),image_res,backgrounds,palette,myview=renderView15_B)

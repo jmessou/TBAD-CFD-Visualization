@@ -1,0 +1,12 @@
+#Add new names to each line after a comma 
+Brachiocephalic trunk,b-trunk 
+Left common carotid artery,carotid 
+Left subcl. Artery,subclavian
+Celiac trunk,celiac
+Superior mesenteric artery,superior-mesenteric
+Right renal artery,right-renal 
+Left renal artery,left-renal
+Right external iliac,right-ext-illiac
+Right internal iliac,right-int-illiac
+Left internal iliac,left-int-illiac
+Left external iliac,left-ext-illiac

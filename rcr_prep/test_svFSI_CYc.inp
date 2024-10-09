@@ -1,0 +1,511 @@
+#Format Version 1.0
+# General simulation parameters
+# -----------------------------------------------------
+Number of spatial dimensions: 3
+Number of time steps: 600
+Time step size: 0.00779
+Continue previous simulation: 1
+Restart file name: results
+Increment in saving restart files: 5
+Start saving after time step: 1
+Save averaged results: 1
+Save results to VTK format: 1
+Name prefix of saved VTK files: all_results
+Increment in saving VTK files: 5
+Spectral radius of infinite time step: 0.2
+Searched file name to trigger stop: STOP_SIM
+Simulation requires remeshing: F
+Verbose: 1
+Warning: 1
+Debug: 0
+
+# Domains
+#------------------------------------------------------
+Add mesh: p3F_fsi_fluid_v1_m22-mesh-complete {
+   Mesh file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-complete.mesh.vtu
+   Add face: lumen_b-trunk {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_b-trunk.vtp
+   }
+   Add face: lumen_carotid {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_carotid.vtp
+   }
+   Add face: lumen_celiac {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_celiac.vtp
+   }
+   Add face: lumen_inlet {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_inlet.vtp
+   }
+   Add face: lumen_left-ext-illiac {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_left-ext-illiac.vtp
+   }
+   Add face: lumen_left-int-illiac {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_left-int-illiac.vtp
+   }
+   Add face: lumen_left-renal {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_left-renal.vtp
+   }
+   Add face: lumen_right-ext-illiac {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_right-ext-illiac.vtp
+   }
+   Add face: lumen_right-int-illiac {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_right-int-illiac.vtp
+   }
+   Add face: lumen_right-renal {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_right-renal.vtp
+   }
+   Add face: lumen_subclavian {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_subclavian.vtp
+   }
+   Add face: lumen_superior-mesenteric {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_superior-mesenteric.vtp
+   }
+   Add face: lumen_wall {
+      Face file path: mesh/p3F_fsi_fluid_v1_m22-mesh-complete/mesh-surfaces/lumen_wall.vtp
+   }
+   Domain: 1
+}
+Add mesh: p3F_solid_v1_m21-mesh-complete {
+   Mesh file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-complete.mesh.vtu
+   Add face: solid_b-trunk {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_b-trunk.vtp
+   }
+   Add face: solid_carotid {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_carotid.vtp
+   }
+   Add face: solid_celiac {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_celiac.vtp
+   }
+   Add face: solid_inlet {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_inlet.vtp
+   }
+   Add face: solid_left-ext-illiac {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_left-ext-illiac.vtp
+   }
+   Add face: solid_left-int-illiac {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_left-int-illiac.vtp
+   }
+   Add face: solid_left-renal {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_left-renal.vtp
+   }
+   Add face: solid_right-ext-illiac {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_right-ext-illiac.vtp
+   }
+   Add face: solid_right-int-illiac {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_right-int-illiac.vtp
+   }
+   Add face: solid_right-renal {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_right-renal.vtp
+   }
+   Add face: solid_subclavian {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_subclavian.vtp
+   }
+   Add face: solid_superior-mesenteric {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_superior-mesenteric.vtp
+   }
+   Add face: solid_wall_inner {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_wall_inner.vtp
+   }
+   Add face: solid_wall_outer {
+      Face file path: mesh/p3F_solid_v1_m21-mesh-complete/mesh-surfaces/solid_wall_outer.vtp
+   }
+   Domain: 2
+}
+
+Add projection: solid_wall_inner { Project from face: lumen_wall }
+
+# Equations
+#------------------------------------------------------
+Add equation: FSI {
+   Coupled: 1
+   Min iterations: 3
+   Max iterations: 10
+   Tolerance: 1e-4
+
+   Domain: 1 {
+      Equation: fluid
+      Density: 0.00106
+      Viscosity: Carreau-Yasuda {
+      Limiting high shear-rate viscosity: 0.00345
+      Limiting low shear-rate viscosity: 0.056
+      Shear-rate tensor multiplier (lamda): 1.902
+      Shear-rate tensor exponent (a): 1.25
+      Power-law index (n): 0.22
+      }
+   Backflow stabilization coefficient: 0.2
+   }
+
+   Domain: 2 {
+      Equation: struct
+      Constitutive model: nHK
+      Dilational penalty model: Quad
+      Density: 0.0012
+      Elasticity modulus: 8e+05
+      Poisson ratio: 0.49
+   }
+
+   LS type: GMRES {
+      Preconditioner: FSILS
+      Max iterations: 15
+      Tolerance: 1e-4
+      #Absolute tolerance: 1e-4
+      Krylov space dimension: 50
+   }
+
+   Output: Spatial {
+      Displacement: t
+      Velocity: t
+      Pressure: t
+      WSS: t
+   }
+
+   Add BC: lumen_b-trunk {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.0432475,3.15524,0.389228)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_carotid {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.150621,0.90596,1.35559)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_celiac {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.0693333,1.96812,0.624)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_inlet {
+      Type: Dirichlet
+      Time dependence: Unsteady
+      Temporal values file path: bm-inflow-1.227.txt
+      Profile: Parabolic
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_left-ext-illiac {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.0970667,1.4058,0.8736)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_left-int-illiac {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.236108,0.57794,2.12497)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_left-renal {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.104,1.31208,0.936)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_right-ext-illiac {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.0794182,1.7182,0.714764)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_right-int-illiac {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.194133,0.7029,1.7472)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_right-renal {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.121333,1.12464,1.092)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_subclavian {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.0647111,2.1087,0.5824)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: lumen_superior-mesenteric {
+      Type: Neumann
+      Time dependence: RCR
+      RCR values: (0.213073,0.64042,1.91766)
+      Distal pressure: 0
+      Initial pressure: 0
+      Profile: Flat
+   }
+
+   Add BC: solid_b-trunk {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_carotid {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_celiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_inlet {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_left-ext-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_left-int-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_left-renal {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_right-ext-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_right-int-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_right-renal {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_subclavian {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_superior-mesenteric {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: solid_wall_outer {
+      #Type: Neumann
+      Type: Robin
+      Stiffness : 1.0e4
+      Damping: 0.0
+      Apply along normal direction: f
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+   }
+
+}
+
+Add equation: mesh {
+   Coupled: 1
+   Min iterations: 1
+   Max iterations: 10
+   Tolerance: 1e-4
+
+   Poisson ratio: 0.3
+
+   Output: Spatial {
+      Displacement: t
+   }
+
+   Add BC: lumen_b-trunk {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_carotid {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_celiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_inlet {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_left-ext-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_left-int-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_left-renal {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_right-ext-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_right-int-illiac {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_right-renal {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_subclavian {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+   Add BC: lumen_superior-mesenteric {
+      Type: Dirichlet
+      Time dependence: Steady
+      Value: 0
+      Profile: Flat
+      Zero out perimeter: 1
+      Impose flux: 1
+   }
+
+}
+

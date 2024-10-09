@@ -35,6 +35,7 @@ class Patient:
         self.inflow_s = -1
         self.R = -1 
         self.C = -1 
+        self.viscosity = ""
         self.exp_dic = None
 
         #Experiment variables
@@ -70,44 +71,108 @@ class Patient:
         self.inlet.set_reference(self.dias_bp,self.sys_bp,self.mean_bp,self.amp)
 
     #Add Experiment info 
-    def add_exp_info(self,exp, in_flow_s, R, C):
+    def add_exp_info(self,exp, in_flow_s, R, C,viscosity="constant"):
         self.exp = exp
         self.inflow_s = in_flow_s
         self.R = R
         self.C = C
+        self.viscosity = viscosity
         self.exp_dic = {"Patient ID":self.id,"Within 10%":None,"Within 5%":None,"Exp":self.exp, "Job Directory":self.job_dir,
-        "In":self.inflow_s, "R":self.R, "C":self.C} 
+        "In":self.inflow_s, "R":self.R, "C":self.C,"viscosity":self.viscosity} 
+
+    #Remove indices of extra non strict extrema: 
+    #extr_range: minimum needed between 2 points to not be a non-strict extrema
+    #Array: [0 5 6 10 15], extr_range: 2
+    #Return: [0 5 10 15] 
+    def rm_extra_non_strict_extrema(self,arr,extr_range=None,print_all=False):
+        if extr_range is None: 
+            #Values should be approximately evenly spaced 
+            #If we have elements to remove, the value will be underestimated,
+            #which is fine 
+            extr_range = int((arr[-1]-arr[0])/len(arr)*0.5)
+        if print_all:
+            print(f"Keeping  the first nb for numbers that are within {extr_range} of each other")
+        cleaned_arr = [arr[0]]
+        # Array short enough, for loop is fine
+        for i in range(1, len(arr)):
+            if arr[i] - cleaned_arr[-1] > extr_range:
+                cleaned_arr.append(arr[i])
+        return cleaned_arr 
+
+    #Look for min idx so that the min always comes after the max
+    #(diastole after systole)
+    #Already true for the last value 
+    def adjust_min(self,arr,max_idx,min_idx,print_all=True):
+        n_cycles = len(max_idx)
+        steps = len(arr)/n_cycles
+        #Assuming at least 100 steps per cycle
+        estimated_cycle_len = round((max_idx[1] - max_idx[0])/100)*100
+        #Most likely last cycle did not finish 
+        if (steps % 10) != 0: 
+            steps = estimated_cycle_len
+        steps = int(steps)
+        new_min_idx = [0] #Discarded by next code 
+
+        if print_all: 
+            print(f"Using {n_cycles} cycles, guessing {steps} steps per cycle")
+        for i in range(n_cycles):
+            max_min_idx = np.minimum((i+1)*steps -1,len(arr))
+            new_min_idx.append(max_idx[i]+np.argmin(arr[max_idx[i]:max_min_idx]))
+        if print_all:
+            print(f"[Old min idx]: {min_idx}")
+            print(f"[New min idx]: {new_min_idx}")
+
+        return new_min_idx
 
     #order: How many points on each side to use for the comparison to consider comparator(n, n+x) to be True.
-    def compare_to_exp(self,res_dir,region="inlet",order=5):
+    def compare_to_exp(self,res_dir,region="inlet",order=5,keep_first_n_cycles=None,force_min_after_max=True):
         nb_min_max_same = True
+        print("{} points found in total".format(len(res_dir["pressure"])))
         print("Using {} points on each side for comparison...".format(order))
         pressure = res_dir["pressure"] #View (will update original as well)
         #All regions?
         #faces = [x for x in pressure.columns if x != "step"] 
         faces = ["inlet", "All Min", "All Max"]
-        #import pdb; pdb.set_trace()
 
         #Are we interested in regions that have a min or max at one point?
         faces += pressure["All Min Region"].unique().tolist()
         faces += pressure["All Max Region"].unique().tolist()
+        faces = ["inlet"] #TODO: Only looking at inlet, remove if interested in other regions
 
         #Get local min/max for each region (including all regions)
         for region in faces:
+            print(region)
             min_idx = argrelextrema(pressure[region].values, np.less_equal,
                         order=order)[0]
             max_idx = argrelextrema(pressure[region].values, np.greater_equal,
                         order=order)[0]
+            min_idx = self.rm_extra_non_strict_extrema(min_idx,extr_range=None)
+            max_idx = self.rm_extra_non_strict_extrema(max_idx,extr_range=None)
+            if force_min_after_max and len(max_idx)>1: 
+                min_idx = self.adjust_min(pressure[region].values,max_idx,min_idx)
+
+            if keep_first_n_cycles is not None and keep_first_n_cycles <= len(max_idx) and keep_first_n_cycles < len(min_idx): 
+                min_idx = min_idx[:keep_first_n_cycles+1]
+                max_idx = min_idx[:keep_first_n_cycles]
             pressure[region+'_min'] = pressure.iloc[min_idx][region]
             pressure[region+'_max'] = pressure.iloc[max_idx][region]
             
             if len(min_idx)-1 != len(max_idx):
-                print("[WARNING!] (nb_min ({}) - 1) != nb_max ({}), try increasing 'order' - i.e. the number of points used for comparison on each side".format(len(min_idx),len(max_idx)))
-                print("Min idx: {}".format(min_idx))
-                print("Max idx: {}".format(max_idx))
+                print('''[WARNING!] (nb_min ({}) - 1) != nb_max ({}), try increasing 'order' )
+                - i.e. the number of points used for comparison on each side OR try only looking at one region.'''.format(len(min_idx),len(max_idx)))
+                print("[{}] Min idx: {}".format(region,min_idx))
+                print("[{}] Max idx: {}".format(region,max_idx))
                 nb_min_max_same = False
-                print("Breaking loop! Will not set regions...")
-                break
+                print("Moving to next face! Will not set regions...")
+                #Simulation most likely did not finish, we remove the last max value 
+                if len(min_idx)-1 == len(max_idx)-1:
+                    warn_msg = '''[WARNING!] (nb_min ({}) - 1) = nb_max-1 ({}), simulation most likely did not finish,
+                    removing the last max value.'''.format(len(min_idx),len(max_idx)-1)
+                    print(warn_msg)
+                    warnings.warn(warn_msg,RuntimeWarning)
+                    max_idx = max_idx[:-1]
+                else: 
+                    continue # break
 
             #Set experiment variables and compare to reference values
             #Note that the first min is skipped since diastole if after systole
@@ -160,18 +225,20 @@ class Patient:
         print("Done saving Patient Data to tsv {}...".format(fpath))
     
 
-    def __str__(self):
+    def __str__(self,show_diff=True):
         return "Patient ID: {} | Systolic BP: {} | Diastolic BP: {} | Heart Rate: {}\
         \nMean BP: {:.2g} | BP  Amplitude: {:.2g}\
         \nJob: {} | Nb Cycles: {}\
-        \n{}\
         \n{}".format(
+        # \n{}\
+        # \n{}".format(
         self.id, self.sys_bp, self.dias_bp, self.heart_rate, 
         self.mean_bp, self.amp,
         self.job_dir,
         self.nb_cycles, 
-        self.inlet,
-        self.all)
+        self.inlet.__str__(show_diff=show_diff))
+        # self.inlet.__str__(show_diff=show_diff),
+        # self.all.__str__(show_diff=show_diff))
  
 #Region class 
 #Compare to reference using the column that corresponds to region 
@@ -239,7 +306,7 @@ class Region:
         self.validate_exp()
 
         
-    def __str__(self):
+    def __str__(self,show_diff=True):
         return "\n===Region: {} (Nb Cycles = {} | 10%: {} | 5%: {})\
     \n   Within 10%: {}\
     \n   Within 5%: {}\
@@ -250,10 +317,10 @@ class Region:
     self.region, self.nb_cycles, self.w10, self.w5,
     format_true(self.w10), 
     format_true(self.w5),
-    self.min.__str__(), 
-    self.max.__str__(), 
-    self.mean.__str__(), 
-    self.amp.__str__())
+    self.min.__str__(show_diff=show_diff), 
+    self.max.__str__(show_diff=show_diff), 
+    self.mean.__str__(show_diff=show_diff), 
+    self.amp.__str__(show_diff=show_diff))
 
 #Compares to a reference and computes all the values related to it
 # Can be used as min or max since it only deals with a column and a reference (numbers)
@@ -272,6 +339,9 @@ class Min_max_res:
         self.lvalue_region = ""
         self.value = [0] #Last min 
         self.value_region = [""]
+        #Difference between current and previous val
+        self.value_abs_diff = [None] 
+        self.value_rel_diff = [None] 
 
         #Use validate exp after setting other values
         self.lvalue_abs_diff = 0
@@ -284,6 +354,13 @@ class Min_max_res:
     def set_reference(self,ref):
         self.ref = ref 
     
+    #Compute difference from current value to previous value
+    def compute_diff(self):
+        value_arr = np.array(self.value)
+        value_abs_diff = value_arr[1:] - value_arr[0:-1]
+        self.value_abs_diff = [None] + value_abs_diff.tolist()
+        self.value_rel_diff = [None] + (100*value_abs_diff/value_arr[0:-1]).tolist()
+
     # Compute difference from reference and 
     # check if we are within 10% or 5% of the reference
     def validate_exp(self):
@@ -303,9 +380,10 @@ class Min_max_res:
             self.value = pressure.tolist()
         else:
             self.value = pressure.iloc[idx][region].tolist() #Value for all cycle
+        self.compute_diff() #Compute difference between current and next value
         self.lvalue = self.value[-1] #Value for the last cycle
         
-        #Add the region where that value is  (only really applies for overall min/max)
+        #Add the region from where that value comes  (only really applies for overall min/max)
         if type(pressure).__module__ != np.__name__ and region + " Region" in pressure.columns:
             self.value_region = pressure.iloc[idx][region + " Region"].tolist()
             self.lvalue_region = self.value_region[-1]
@@ -328,15 +406,24 @@ class Min_max_res:
         self.type+" Diff": self.lvalue_abs_diff, self.type+" % Diff": self.lvalue_rel_diff}
         return self.res_dic
 
-    def __str__(self):
+    def __str__(self,show_diff=True):
+        if show_diff:
+            diff_rows = "\n       {} Diff   : {}\
+                         \n       {} % Diff : {}".format(
+            self.type, ["{:.1f}".format(x) if x is not None else x for x in self.value_abs_diff], 
+            self.type, ["{:.1f}%".format(x) if x is not None else x for x in self.value_rel_diff])
+        else: 
+            diff_rows = ""
         return "-----Type: {}\
         \n       Last {}: {:.1f} (diff: {:.1f} | %-diff: {:.1f}%) [{}]\
         \n       {} Regions: {}\
         \n       {}        : {}\
+        {}\
         \n       Within 10%: {} | Within 5%: {}".format(
         self.type,
         self.type, self.lvalue,  self.lvalue_abs_diff, self.lvalue_rel_diff, self.lvalue_region,
         self.type, self.value_region, 
         self.type, ["{:.1f}".format(x) for x in self.value], 
+        diff_rows,
         format_true(self.w10), 
         format_true(self.w5))
