@@ -4,8 +4,7 @@
   <br>
 </h1>
 
-<h4 align="center">This repository contains code that helps run large-scale Computational Fluid Dynamics (CFD) and Fluid-structure Interaction (FSI) experiments on patients with Type B Aortic Dissection using SimVascular and Paraview.  </h4>
-
+<h4 align="center">This repository contains code that helps run large-scale Computational Fluid Dynamics (CFD) and Fluid-structure Interaction (FSI) experiments on patients with Type B Aortic Dissection using SimVascular and Paraview. [<a href="https://doi.org/10.1038/s41598-024-78348-9" target="_blank">Paper</a>]</h4>
 
 <p align="center">
   <a href="#repository-structure">Repository Structure</a> •
@@ -22,6 +21,10 @@
 
 <!-- TODO UPDATE -->
 ![screenshot](github_summary.png)
+
+## References 
+Messou, J. C. E., Yeung, K., Sudbrook, E., Zhang, J., Toursavadkohi, S., Ucuzian, A. A., & Tubaldi, E. (2024). **Investigating the role of thrombosis and false lumen orbital orientation in the hemodynamics of Type B aortic dissection**. Scientific Reports, 14(1), 27379. 
+[DOI: 10.1038/s41598-024-78348-9](https://doi.org/10.1038/s41598-024-78348-9)
 
 ## Repository Structure
 * **mesh_prep/obj_to_vtp**: Convert .obj file (Meshmixer) to .vtp file using Paraview, automatically attribute face names, and generate a .mdl for SimVascular 
@@ -50,7 +53,8 @@
 * [Paraview 5.11](https://www.paraview.org/download/)
 * Code tested in Ubuntu 20.04.6 LTS
 ```
-conda env create --name aorta --file ..._environment.yaml
+conda env create --name aorta --file ad_environment.yml
+conda activate aorta
 ```
 ## mesh_prep/obj_to_vtp
 * **Goal**: Convert a Meshmixer model (.obj) so it can be read in SimVascular (.vtp + .mdl)
@@ -280,4 +284,19 @@ FULL_PATH/pvpython paraview_analyze.py --config example.ini
 * Interactive Slurm Session on Zaratan
 ```
 sinteractive --t 120 -mem=20g --cpus-per-task=8
+```
+
+## Citation
+If you find this repository useful, we kindly ask that you cite the following paper:
+```
+@article{messou2024investigating,
+  title={Investigating the role of thrombosis and false lumen orbital orientation in the hemodynamics of Type B aortic dissection},
+  author={Messou, Joseph C. E. and Yeung, Kelly and Sudbrook, Eric and Zhang, Jackie and Toursavadkohi, Shahab and Ucuzian, Areck A. and Tubaldi, Eleonora},
+  journal={Scientific Reports},
+  volume={14},
+  number={1},
+  pages={27379},
+  year={2024},
+  publisher={Nature Publishing Group UK London}
+}
 ```
